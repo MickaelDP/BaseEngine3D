@@ -39,6 +39,7 @@ target_include_directories(glad PUBLIC external/glad/include)
 add_executable(BaseEngine3D
     src/main.cpp
     src/core/Window.cpp
+    src/core/Time.cpp
 )
 target_link_libraries(BaseEngine3D PRIVATE glad glfw glm::glm)
 
