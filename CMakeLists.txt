@@ -36,7 +36,10 @@ add_library(glad STATIC external/glad/src/glad.c)
 target_include_directories(glad PUBLIC external/glad/include)
 
 # --- Main executable ---
-add_executable(BaseEngine3D src/main.cpp)
+add_executable(BaseEngine3D
+    src/main.cpp
+    src/core/Window.cpp
+)
 target_link_libraries(BaseEngine3D PRIVATE glad glfw glm::glm)
 
 # glad uses dlopen/dlsym under Linux to load GL functions at
