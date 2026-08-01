@@ -1,47 +1,67 @@
 #include "core/Window.h"
 #include "core/Time.h"
+#include "core/Shader.h"
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <iostream>
 
-// Step 2: the real game loop skeleton.
-// Structure is now: input -> update(dt) -> render, with a properly
-// measured delta time. Nothing moves yet (no camera until Step 5), so dt
-// is only reported to the console to prove it is sane and stable.
+// Step 3: compile and link a minimal shader pair, prove it works.
+// No geometry yet (that's Step 4) — the validation here is that
+// Shader construction succeeds without throwing, and that use()
+// binds it without GL errors.
+//
+// The shaders are the simplest possible valid GLSL 4.30 pair:
+// vertex does nothing, fragment outputs a solid color.
+//
+// Note: We use C++ raw string literals (R"(...)") to write multi-line 
+// GLSL code cleanly without needing manual character escaping.
+static const char* VERT_SRC = R"(
+    #version 430 core
+    void main() {
+        gl_Position = vec4(0.0, 0.0, 0.0, 1.0);
+    }
+)";
+
+static const char* FRAG_SRC = R"(
+    #version 430 core
+    out vec4 FragColor;
+    void main() {
+        FragColor = vec4(0.2, 0.6, 1.0, 1.0);
+    }
+)";
+
 int main() {
     try
     {
         Window window(800, 600, "BaseEngine3D - Step 1");
-
-        // Time must be constructed AFTER Window: its constructor calls
-        // glfwGetTime(), which is only meaningful once GLFW is initialized.
         Time time;
+
+        // Shader must be constructed AFTER Window (GL context must exist
+        // before any glCreate* call — same rule as glad initialization).
+        Shader shader(VERT_SRC, FRAG_SRC);
+        std::cout << "Shader compiled and linked OK (id="
+                  << shader.getId() << ")" << std::endl;
 
         while (!window.shouldClose())
         {
-            // --- 1. Timing: exactly once, at the top of the frame ---
             time.update();
             const float dt = time.getDeltaTime();
 
-            // --- 2. Input ---
             window.pollEvents();
 
-            // --- 3. Update ---
-            // Nothing to move yet. This is where camera/scene updates will
-            // go from Step 5 onwards, all multiplied by dt.
-            (void)dt; // silence the unused-variable warning until then
+            (void)dt;
 
-
-            // --- 4. Render ---
             glClearColor(0.1f, 0.12f, 0.18f, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT);
+
+            // Bind the shader — no draw call yet, but binding proves
+            // the program handle is valid and accepted by the driver.
+            shader.use();
+
             window.swapBuffers();
 
-            // --- 5. Validation report (Step 2 only) ---
-            // Printing every frame would flood stdout and slow the loop
-            // enough to distort the very measurement we want to check.
             if (time.hasSecondElapsed()) {
                 std::cout << "FPS: " << time.getFPS()
                           << " | dt: " << dt * 1000.0f << " ms"
