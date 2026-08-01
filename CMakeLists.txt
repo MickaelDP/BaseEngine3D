@@ -41,6 +41,7 @@ add_executable(BaseEngine3D
     src/core/Window.cpp
     src/core/Time.cpp
     src/core/Shader.cpp
+    src/core/Mesh.cpp
 )
 target_link_libraries(BaseEngine3D PRIVATE glad glfw glm::glm)
 
