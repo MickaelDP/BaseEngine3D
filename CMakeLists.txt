@@ -42,7 +42,14 @@ add_executable(BaseEngine3D
     src/core/Time.cpp
     src/core/Shader.cpp
     src/core/Mesh.cpp
+    src/scene/Camera.cpp
+    src/scene/Transform.cpp
 )
+
+# Let sources include headers as "core/Window.h" / "scene/Camera.h"
+# regardless of which subdirectory they live in.
+target_include_directories(BaseEngine3D PRIVATE src)
+
 target_link_libraries(BaseEngine3D PRIVATE glad glfw glm::glm)
 
 # glad uses dlopen/dlsym under Linux to load GL functions at
