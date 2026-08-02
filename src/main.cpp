@@ -2,6 +2,8 @@
 #include "core/Time.h"
 #include "core/Shader.h"
 #include "core/Mesh.h"
+#include "scene/Camera.h"
+#include "scene/Transform.h"
 
 #include <glad/glad.h>
 #include <GLFW/glfw3.h>
@@ -9,35 +11,76 @@
 #include <iostream>
 #include <vector>
 
-// Step 4: first real geometry on screen.
-// The vertex shader now receives a per-vertex attribute instead of
-// hardcoding a single position. Coordinates are raw NDC (Normalized
-// Device Coordinates): the visible area is exactly -1..+1 on X and Y,
-// with (0,0) at the centre of the window. No camera, no matrices yet —
-// that's Step 5.
+// Step 5: real 3D.
+// Three changes make this the structural break from a 2D engine:
+//   1. MVP matrices (Model * View * Projection) replace raw NDC coords
+//   2. GL_DEPTH_TEST decides which face is in front — meaningless in 2D
+//   3. dt finally drives something visible (the cube rotates)
 static const char* VERT_SRC = R"(
     #version 430 core
 
-    // location = 0 must match the first argument of glVertexAttribPointer
-    // in Mesh::setupVertexBuffer. This is the only contract between the C++
-    // side and the GLSL side.
     layout(location = 0) in vec3 aPos;
 
+    // Sent from C++ via Shader::setMat4 once per frame.
+    uniform mat4 uModel;
+    uniform mat4 uView;
+    uniform mat4 uProjection;
+
+    out vec3 vLocalPos;
+
     void main() {
-        // Straight passthrough: the position is already in clip space.
-        // w = 1.0 means "no perspective division", which is what we want
-        // until projection matrices arrive in Step 5.
-        gl_Position = vec4(aPos, 1.0);
+        // Multiplication order is right-to-left: the vertex is first placed
+        // in world space (Model), then relative to the camera (View), then
+        // flattened onto the screen (Projection). Swapping any two produces
+        // a scene that is wrong in a way that's very hard to debug visually.
+        gl_Position = uProjection * uView * uModel * vec4(aPos, 1.0);
+
+        // Passed to the fragment shader to colour faces by position, so the
+        // cube's 3D structure is readable without lighting.
+        vLocalPos = aPos;
     }
 )";
 
 static const char* FRAG_SRC = R"(
     #version 430 core
+
+    in vec3 vLocalPos;
     out vec4 FragColor;
+
     void main() {
-        FragColor = vec4(0.2, 0.6, 1.0, 1.0);
+        // Map -0.5..0.5 local coords to 0..1 RGB. Cheap way to make the
+        // cube's faces visually distinct before real lighting exists.
+        FragColor = vec4(vLocalPos + 0.5, 1.0);
     }
 )";
+
+// Cube: 8 vertices, 12 triangles (2 per face), 36 indices.
+// Indexed drawing pays off here — without an EBO this would need 36
+// duplicated vertices instead of 8.
+static std::vector<Vertex> makeCubeVertices() {
+    return {
+        {{ -0.5f, -0.5f,  0.5f }},  // 0 front bottom left
+        {{  0.5f, -0.5f,  0.5f }},  // 1 front bottom right
+        {{  0.5f,  0.5f,  0.5f }},  // 2 front top right
+        {{ -0.5f,  0.5f,  0.5f }},  // 3 front top left
+        {{ -0.5f, -0.5f, -0.5f }},  // 4 back bottom left
+        {{  0.5f, -0.5f, -0.5f }},  // 5 back bottom right
+        {{  0.5f,  0.5f, -0.5f }},  // 6 back top right
+        {{ -0.5f,  0.5f, -0.5f }}   // 7 back top left
+    };
+}
+
+
+static std::vector<GLuint> makeCubeIndices() {
+    return {
+        0, 1, 2,  2, 3, 0,   // front
+        5, 4, 7,  7, 6, 5,   // back
+        4, 0, 3,  3, 7, 4,   // left
+        1, 5, 6,  6, 2, 1,   // right
+        3, 2, 6,  6, 7, 3,   // top
+        4, 5, 1,  1, 0, 4    // bottom
+    };
+}
 
 int main() {
     try
@@ -46,43 +89,51 @@ int main() {
         Time time;
         Shader shader(VERT_SRC, FRAG_SRC);
 
-        // A triangle in NDC. Winding order is counter-clockwise, which is
-        // OpenGL's default "front face" — relevant once back-face culling
-        // is enabled in a later step.
-        const std::vector<Vertex> vertices = {
-            {{ -0.5f, -0.5f, 0.0f }},  // bottom left
-            {{  0.5f, -0.5f, 0.0f }},  // bottom right
-            {{  0.0f,  0.5f, 0.0f }}   // top centre
-        };
+        Mesh cube(makeCubeVertices(), makeCubeIndices());
 
-        const std::vector<GLuint> indices = { 0, 1, 2 };
+        // Camera pulled back on +Z so the cube at the origin is in view.
+        const float aspect = static_cast<float>(window.getWidth())
+                           / static_cast<float>(window.getHeight());
+        Camera camera(glm::vec3(0.0f, 0.0f, 3.0f), aspect);
 
-        // Mesh must be constructed AFTER Window: glGenVertexArrays and
-        // friends require an active GL context.
-        Mesh triangle(vertices, indices);
+        Transform cubeTransform;
 
-        std::cout << "Mesh ready: "
-                  << triangle.getVertexCount() << " vertices, "
-                  << triangle.getIndexCount()  << " indices" << std::endl;
+        // THE line that makes this 3D rather than 2D. Without it, faces
+        // are drawn in index order and the back of the cube overwrites
+        // the front — the shape looks inside-out and flickers.
+        glEnable(GL_DEPTH_TEST);
 
+        std::cout << "Cube ready: " << cube.getIndexCount()
+                  << " indices, depth test enabled" << std::endl;
 
         while (!window.shouldClose())
         {
             time.update();
             const float dt = time.getDeltaTime();
-            (void)dt;
 
             window.pollEvents();
 
+            // --- Update ---
+            // 45 degrees per SECOND, not per frame. This is the payoff of
+            // Step 2: identical rotation speed at 30 or 1400 FPS.
+            cubeTransform.rotation.y += 45.0f * dt;
+            cubeTransform.rotation.x += 20.0f * dt;
+
+            // --- Render ---
             glClearColor(0.1f, 0.12f, 0.18f, 1.0f);
-            glClear(GL_COLOR_BUFFER_BIT);
+            // The depth buffer must be cleared too, not just the colour.
+            // Forgetting GL_DEPTH_BUFFER_BIT leaves last frame's depth
+            // values around and geometry disappears after a few frames.
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-            // Bind order matters: the shader program first, then the
-            // geometry. draw() binds the VAO internally.
+
             shader.use();
-            triangle.draw();
+            shader.setMat4("uModel",      cubeTransform.getModelMatrix());
+            shader.setMat4("uView",       camera.getViewMatrix());
+            shader.setMat4("uProjection", camera.getProjectionMatrix());
 
-
+            cube.draw();
+            
             window.swapBuffers();
 
             if (time.hasSecondElapsed()) {
