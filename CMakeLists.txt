@@ -42,8 +42,10 @@ add_executable(BaseEngine3D
     src/core/Time.cpp
     src/core/Shader.cpp
     src/core/Mesh.cpp
+    src/core/Engine.cpp
     src/scene/Camera.cpp
     src/scene/Transform.cpp
+    src/render/RenderSubsystem.cpp
 )
 
 # Let sources include headers as "core/Window.h" / "scene/Camera.h"
