@@ -4,26 +4,21 @@
 #include <iostream>
 #include <memory>
 
-// Step 6: main() is now what it should always have been — an entry point
-// and nothing else. It instantiates the Engine, registers subsystems,
-// calls run(), and catches fatal errors.
-//
-// Compare with Step 5's main(): shaders, cube data, camera, matrices and
-// the render loop all lived here. If application logic starts creeping
-// back into this file, that's the signal a responsibility has leaked out
-// of the Engine layer.
+// Step 7: unchanged in spirit from Step 6 — the subsystem now receives
+// the backend from the Engine. main() still knows nothing about OpenGL.
 int main() {
     try
     {
         constexpr int WIDTH  = 800;
         constexpr int HEIGHT = 600;
 
-        Engine engine(WIDTH, HEIGHT, "BaseEngine3D - Step 6");
+        Engine engine(WIDTH, HEIGHT, "BaseEngine3D - Step 7");
 
         const float aspect = static_cast<float>(WIDTH)
                            / static_cast<float>(HEIGHT);
 
-        engine.addSubsystem(std::make_unique<RenderSubsystem>(aspect));
+        engine.addSubsystem(
+            std::make_unique<RenderSubsystem>(engine.getBackend(), aspect));
 
         engine.run();
     }
