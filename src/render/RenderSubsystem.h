@@ -5,20 +5,16 @@
 #include "core/Mesh.h"
 #include "scene/Camera.h"
 #include "scene/Transform.h"
+#include "rhi/IRenderBackend.h"
 
 #include <memory>
 
-// Step 6: the first concrete subsystem.
-// Owns everything the Step 5 main() used to own directly: shader, mesh,
-// camera, transform. The Engine drives it without knowing any of that.
-//
-// Members are held by unique_ptr rather than by value because Shader,
-// Mesh and Camera all need an active GL context to construct — which
-// only exists once the Engine has built its Window. Constructing them in
-// init() rather than in the constructor is what makes that possible.
+// Step 7: the subsystem now receives a backend reference instead of
+// calling GL itself. Note there is no #include <glad/glad.h> anywhere in
+// this file or its .cpp — that is the measurable outcome of this step.
 class RenderSubsystem : public ISubsystem {
     public:
-        explicit RenderSubsystem(float aspectRatio);
+        RenderSubsystem(rhi::IRenderBackend& backend, float aspectRatio);
         ~RenderSubsystem() override = default;
 
         void init() override;
@@ -28,6 +24,7 @@ class RenderSubsystem : public ISubsystem {
         const char* getName() const override { return "RenderSubsystem"; }
 
     private:
+        rhi::IRenderBackend& m_backend;
         float m_aspectRatio;
 
         std::unique_ptr<Shader> m_shader;

@@ -43,6 +43,7 @@ add_executable(BaseEngine3D
     src/core/Shader.cpp
     src/core/Mesh.cpp
     src/core/Engine.cpp
+    src/rhi/OpenGLBackend.cpp
     src/scene/Camera.cpp
     src/scene/Transform.cpp
     src/render/RenderSubsystem.cpp
